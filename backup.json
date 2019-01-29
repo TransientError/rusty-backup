@@ -1,0 +1,10 @@
+{
+    "package_managers": [{
+            "name": "blah", 
+            "list": "blah"
+        }
+    ],
+    "updaters": [{
+        "name": "blah"
+    }]
+}
