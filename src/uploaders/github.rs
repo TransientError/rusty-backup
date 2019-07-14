@@ -1,6 +1,9 @@
 use std::path::Path;
 use serde_json::{Value, json};
 use std::fs;
+use std::borrow::Cow;
+use reqwest::Response;
+
 use crate::appconfig::Backup;
 use crate::Result;
 use failure::format_err;
@@ -22,15 +25,34 @@ fn get_request_map(path: &Path) -> Value {
 }
 
 pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
-    let token = backups.get_creds().ok_or(format_err!("Github OAuth token required for Github backup"))?;
-    let gist_id = backups.get_destination().ok_or(format_err!("Gist id required for Github backup"))?;
+    let token = backups.get_creds()
+        .ok_or(format_err!("Github OAuth token required for Github backup; did not backup {}", get_file_name(path)))?;
+
+    let gist_id = backups.get_destination()
+        .ok_or(format_err!("Gist id required for Github backup; did not backup {}", get_file_name(path)))?;
+
     let client = reqwest::Client::new();
 
     match client.patch(&format!("https://api.github.com/gists/{}", gist_id))
         .json(&get_request_map(path))
         .bearer_auth(token)
         .send() {
-            Ok(_) => Ok(()),
+            Ok(ref r) if r.status().is_success() => Ok(()),
+            Ok(r) => Err(format_err!("{}", get_text(r))),
             Err(e) => Err(failure::Error::from(e))
         }
+}
+
+fn get_file_name(path: &Path) -> Cow<str> {
+    match path.file_name() {
+        Some(s) => s.to_string_lossy(),
+        None => Cow::from("")
+    }
+}
+
+fn get_text(mut r: Response) -> String {
+    match r.text() {
+        Ok(s) => s,
+        Err(e) => format!("{}", e)
+    }
 }
