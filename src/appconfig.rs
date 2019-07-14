@@ -37,7 +37,7 @@ impl Backup {
     }
 
     pub fn get_creds(&self) -> Option<String> {
-        self.destination.clone()
+        self.credentials.clone()
     }
 }
 
