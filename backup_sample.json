@@ -1,0 +1,14 @@
+{
+    "archives": [
+        {
+            "name": "test",
+            "content": "echo Some stuff"
+        }
+    ],
+    "backups": [
+        {
+            "name": "hi",
+            "custom": "echo"
+        }
+    ]
+}
