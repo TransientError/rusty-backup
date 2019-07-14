@@ -1,5 +1,6 @@
 use std::result;
 use log::{self, Log};
+use chrono::prelude::*;
 
 use crate::Result;
 
@@ -25,7 +26,7 @@ impl Log for Logger {
     }
 
     fn log(&self, record: &log::Record) {
-        eprintln!("{}: {}", record.level(), record.args())
+        eprintln!("{} {}: {}", Local::now().format("%Y-%m-%dT%H:%M:%S"), record.level(), record.args())
     }
 
     fn flush(&self) {
