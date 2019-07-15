@@ -11,7 +11,7 @@ use log::{info, warn};
 
 type Result<T> = result::Result<T, failure::Error>;
 
-const CONFIG_PATH: &str = "$HOME/.config/backup/config.json";
+const CONFIG_PATH: &str = "/Users/kvwu/.config/backup/config.json";
 
 fn main() {
     if let Err(err) = run() {

@@ -23,7 +23,7 @@ impl Archive {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Backup {
     pub name: String,
     pub custom: Option<String>,
@@ -38,6 +38,10 @@ impl Backup {
 
     pub fn get_creds(&self) -> Option<String> {
         self.credentials.clone()
+    }
+
+    pub fn get_custom(&self) -> Option<String> {
+        self.custom.clone()
     }
 }
 

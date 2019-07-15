@@ -56,3 +56,31 @@ fn get_text(mut r: Response) -> String {
         Err(e) => format!("{}", e)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn should_validate_before_calling() {
+        let backup = Backup {
+            name: "test".to_owned(),
+            custom: None,
+            credentials: None,
+            destination: Some("somewhere".to_owned())
+        };
+
+        let path = Path::new("path");
+
+        let result = upload(path, &backup);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn should_upload() {
+        // Will have to get some DI in this shit first
+    }
+
+}

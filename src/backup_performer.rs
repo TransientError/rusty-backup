@@ -78,3 +78,26 @@ fn consolidate(r1: Result<()>, r2: Result<()>) -> Result<()> {
     }
     r1.and(r2)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_be_modified() {
+        let time = SystemTime::now();
+
+        let result = has_been_modified(time, 10);
+
+        assert!(result)
+    }
+
+    #[test]
+    fn should_not_be_modified() {
+        let time = SystemTime::now() - (Duration::from_secs(10));
+
+        let result = has_been_modified(time, 5);
+
+        assert!(!result);
+    }
+}
