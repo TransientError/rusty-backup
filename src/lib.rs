@@ -1,3 +1,6 @@
+#![cfg_attr(test, feature(proc_macro_hygiene))]
+#![feature(custom_attribute)]
+
 #[macro_use]
 extern crate serde_derive;
 

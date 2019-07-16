@@ -8,12 +8,12 @@ use crate::appconfig::Backup;
 use crate::Result;
 use failure::format_err;
 
-fn get_request_map(path: &Path) -> Value {
+fn get_request_map(path: &Path) -> Result<Value> {
     let package_name = Path::file_stem(path).and_then(|s| s.to_str()).unwrap();
     let filename = format!("{}.txt", package_name);
-    let content = fs::read_to_string(path).unwrap();
+    let content = fs::read_to_string(path)?;
 
-    json!({
+    Ok(json!({
         "description": "backup for kvwu",
         "files": json!({
             filename.clone(): json!({
@@ -21,7 +21,17 @@ fn get_request_map(path: &Path) -> Value {
                 "filename": filename
             })
         })
-    })
+    }))
+}
+
+fn get_host_url() -> String {
+    #[cfg(not(test))]
+    let url = "https://api.github.com".to_owned();
+
+    #[cfg(test)]
+    let url = mockito::server_url();
+
+    return url; 
 }
 
 pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
@@ -33,8 +43,8 @@ pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
 
     let client = reqwest::Client::new();
 
-    match client.patch(&format!("https://api.github.com/gists/{}", gist_id))
-        .json(&get_request_map(path))
+    match client.patch(&format!("{}/gists/{}", get_host_url(), gist_id))
+        .json(&get_request_map(path)?)
         .bearer_auth(token)
         .send() {
             Ok(ref r) if r.status().is_success() => Ok(()),
@@ -61,6 +71,11 @@ fn get_text(mut r: Response) -> String {
 mod tests {
 
     use super::*;
+    use mockito::mock;
+    use tempdir::TempDir;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
 
     #[test]
     fn should_validate_before_calling() {
@@ -80,7 +95,52 @@ mod tests {
 
     #[test]
     fn should_upload() {
-        // Will have to get some DI in this shit first
+        let backup = Backup {
+            name: "test".to_owned(),
+            credentials: Some("creds".to_owned()),
+            destination: Some("upload".to_owned()),
+            ..Default::default()
+        };
+
+        let (path, _tmp) = write_test_content("upload", "content").unwrap();
+
+        let _m = mock("PATCH", "/gists/upload")
+            .with_status(200)
+            .with_body("test")
+            .create();
+
+        let result = upload(&path.as_path(), &backup);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_report_err() {
+        let backup = Backup {
+            name: "test".to_owned(),
+            credentials: Some("creds".to_owned()),
+            destination: Some("report_err".to_owned()),
+            ..Default::default()
+        };
+
+        let (path, _tmp) = write_test_content("report_err", "content").unwrap();
+
+        let _m = mock("PATCH", "/gists/report_err")
+            .with_status(400)
+            .with_body("error")
+            .create();
+
+        let result = upload(&path.as_path(), &backup);
+
+        assert!(result.is_err());
+    }
+
+    fn write_test_content(name: &str, content: &str) -> Result<(PathBuf, TempDir)> {
+        let tmp_dir = TempDir::new(&format!("backup_tmp_{}", name))?;
+        let path = tmp_dir.path().join("test.txt");
+        let mut tmp_file = File::create(&path)?;
+        writeln!(tmp_file, "{}", content)?; 
+        return Ok((path, tmp_dir));
     }
 
 }
