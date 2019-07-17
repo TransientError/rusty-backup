@@ -11,8 +11,8 @@ use std::io;
 use log::info;
 use rayon::prelude::*;
 
-pub fn perform_backup(backups: Vec<Backup>) {
-    match fs::read_dir(Path::new("/Users/kvwu/utils/backup/archives")) {
+pub fn perform_backup(backups: Vec<Backup>, path: &String) {
+    match fs::read_dir(path) {
         Ok(entries) => {
             entries.filter_map(process_file)
             .filter_map(process_entry)

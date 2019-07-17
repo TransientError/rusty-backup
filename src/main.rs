@@ -25,14 +25,14 @@ fn run() -> Result<()> {
     let config = appconfig::read_config(CONFIG_PATH)?;
     
     if let Some(res) = config.archives.par_iter()
-        .map(archive_generator::generate_archive)
+        .map(|archive| archive_generator::generate_archive(archive, &config.archive_path))
         .reduce_with(consolidate) {
             if let Err(e) = res {
                 log_err(e)
             }
         }
     
-    backup_performer::perform_backup(config.backups);
+    backup_performer::perform_backup(config.backups, &config.archive_path);
 
     Ok(info!("Done backing up"))
 }

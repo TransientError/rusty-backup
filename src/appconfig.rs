@@ -1,4 +1,3 @@
-use std::path::{Path, PathBuf};
 use std::io::BufReader;
 use std::fs::File;
 use failure::ResultExt;
@@ -7,20 +6,15 @@ use crate::Result;
 
 #[derive(Deserialize, Debug)]
 pub struct AppConfig {
+    pub archive_path: String,
     pub archives: Vec<Archive>,
     pub backups: Vec<Backup>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Archive {
     pub name: String,
     pub content: String
-}
-
-impl Archive {
-    pub fn get_path(&self) -> PathBuf {
-        return Path::new(&format!("/Users/kvwu/utils/backup/archives/{}.txt", &self.name)).to_owned()
-    }
 }
 
 #[derive(Deserialize, Debug, Default)]
