@@ -1,7 +1,6 @@
 use crate::appconfig::Archive;
-use crate::Result;
+use anyhow::{bail, Error, Result};
 
-use failure::{bail, format_err};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -11,18 +10,16 @@ pub fn generate_archive(package: &Archive, archive_path: &String) -> Result<()> 
     let path = build_path(archive_path, &package.name);
     match Command::new("sh").arg("-c").arg(&package.content).output() {
         result::Result::Ok(ref output) if path.exists() => overwrite_if_different(output, path.as_path()),
-        result::Result::Ok(output) if output.status.success() => {
-            fs::write(path, output.stdout).map_err(failure::Error::from)
-        }
+        result::Result::Ok(output) if output.status.success() => fs::write(path, output.stdout).map_err(Error::from),
         result::Result::Ok(output) => bail!("{:?}", output.stderr),
-        result::Result::Err(e) => Err(failure::Error::from(e)),
+        result::Result::Err(e) => Err(Error::from(e)),
     }
 }
 
 fn overwrite_if_different(output: &Output, path: &Path) -> Result<()> {
     let error_message = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() || !error_message.is_empty() {
-        return Err(format_err!("Error while trying to archive: {}", error_message));
+        bail!("Error while trying to archive: {}", error_message)
     }
     let empty_string = "".to_owned();
     let old_content = fs::read_to_string(path).unwrap_or(empty_string);

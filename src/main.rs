@@ -1,10 +1,8 @@
-use backup::{appconfig, backup_performer, archive_generator, logger};
-use rayon::prelude::*;
-use std::result;
-use std::process;
+use anyhow::{Error, Result};
+use backup::{appconfig, archive_generator, backup_performer, logger};
 use log::{info, warn};
-
-type Result<T> = result::Result<T, failure::Error>;
+use rayon::prelude::*;
+use std::process;
 
 const CONFIG_PATH: &str = "/Users/kvwu/.config/backup/config.json";
 
@@ -18,15 +16,18 @@ fn main() {
 fn run() -> Result<()> {
     logger::init()?;
     let config = appconfig::read_config(CONFIG_PATH)?;
-    
-    if let Some(res) = config.archives.par_iter()
+
+    if let Some(res) = config
+        .archives
+        .par_iter()
         .map(|archive| archive_generator::generate_archive(archive, &config.archive_path))
-        .reduce_with(consolidate) {
-            if let Err(e) = res {
-                log_err(e)
-            }
+        .reduce_with(consolidate)
+    {
+        if let Err(e) = res {
+            log_err(e)
         }
-    
+    }
+
     backup_performer::perform_backup(config.backups, &config.archive_path);
 
     Ok(info!("Done backing up"))
@@ -40,10 +41,10 @@ fn consolidate(r1: Result<()>, r2: Result<()>) -> Result<()> {
     r1.and(r2)
 }
 
-fn log_err(e: failure::Error) {
+fn log_err(e: Error) {
     warn!("{}", e);
     let backtrace = e.backtrace().to_string();
-        if !backtrace.trim().is_empty() {
-            warn!("{}", backtrace)
-        }
+    if !backtrace.trim().is_empty() {
+        warn!("{}", backtrace)
+    }
 }

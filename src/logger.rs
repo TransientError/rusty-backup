@@ -1,8 +1,7 @@
-use std::result;
-use log::{self, Log};
+use anyhow::Result;
 use chrono::prelude::*;
-
-use crate::Result;
+use log::{self, Log};
+use std::result;
 
 pub fn init() -> Result<()> {
     Ok(Logger::init().unwrap())
@@ -15,8 +14,7 @@ const LOGGER: &'static Logger = &Logger();
 
 impl Logger {
     fn init() -> result::Result<(), log::SetLoggerError> {
-        log::set_logger(LOGGER)
-            .map(|()| log::set_max_level(log::LevelFilter::Info))
+        log::set_logger(LOGGER).map(|()| log::set_max_level(log::LevelFilter::Info))
     }
 }
 
@@ -26,7 +24,12 @@ impl Log for Logger {
     }
 
     fn log(&self, record: &log::Record) {
-        eprintln!("{} {}: {}", Local::now().format("%Y-%m-%dT%H:%M:%S"), record.level(), record.args())
+        eprintln!(
+            "{} {}: {}",
+            Local::now().format("%Y-%m-%dT%H:%M:%S"),
+            record.level(),
+            record.args()
+        )
     }
 
     fn flush(&self) {

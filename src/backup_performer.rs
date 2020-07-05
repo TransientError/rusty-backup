@@ -1,73 +1,79 @@
-use crate::uploaders::{custom, github};
 use crate::appconfig::Backup;
-use crate::Result;
 use crate::log_err;
+use crate::uploaders::{custom, github};
+use anyhow::Result;
 
-use std::path::{PathBuf, Path};
-use std::fs::{self, DirEntry};
-use std::time::{SystemTime, Duration};
-use std::result;
-use std::io;
+use anyhow::Error;
 use log::info;
 use rayon::prelude::*;
+use std::fs::{self, DirEntry};
+use std::io;
+use std::path::{Path, PathBuf};
+use std::result;
+use std::time::{Duration, SystemTime};
 
 pub fn perform_backup(backups: Vec<Backup>, path: &String) {
     match fs::read_dir(path) {
         Ok(entries) => {
-            entries.filter_map(process_file)
-            .filter_map(process_entry)
-            .for_each(|p| process_path(p, &backups));
-        },
-        Err(e) => log_err(failure::Error::from(e), log::Level::Error)
+            entries
+                .filter_map(process_file)
+                .filter_map(process_entry)
+                .for_each(|p| process_path(p, &backups));
+        }
+        Err(e) => log_err(Error::from(e), log::Level::Error),
     }
 }
 
 fn process_file(result: io::Result<DirEntry>) -> Option<DirEntry> {
     match result {
         Ok(dir) => Some(dir),
-        Err(e) => {log_err(failure::Error::from(e), log::Level::Warn); None}
+        Err(e) => {
+            log_err(Error::from(e), log::Level::Warn);
+            None
+        }
     }
 }
 
 fn process_entry(entry: DirEntry) -> Option<PathBuf> {
     let one_day_secs = 86400;
-    let modified_time = entry.metadata()
-        .and_then(|m| m.modified());
+    let modified_time = entry.metadata().and_then(|m| m.modified());
 
     match modified_time {
         result::Result::Ok(m) if has_been_modified(m, one_day_secs) => Some(entry.path()),
         result::Result::Ok(_) => {
-            info!("{} has not been modified; skipping", entry.file_name().to_string_lossy());
+            info!(
+                "{} has not been modified; skipping",
+                entry.file_name().to_string_lossy()
+            );
             None
-        },
+        }
         Err(e) => {
-            log_err(failure::Error::from(e), log::Level::Warn);
+            log_err(Error::from(e), log::Level::Warn);
             None
         }
     }
 }
 
 fn has_been_modified(time: SystemTime, secs: u64) -> bool {
-    return time.elapsed()
+    return time
+        .elapsed()
         .map(|dur| dur < Duration::from_secs(secs))
-        .map_err(|e| log_err(failure::Error::from(e), log::Level::Warn))
+        .map_err(|e| log_err(Error::from(e), log::Level::Warn))
         .unwrap_or(false);
 }
 
 fn process_path(path: PathBuf, backups: &Vec<Backup>) {
-    if let Some(res) = backups.par_iter()
-        .map(|b| backup(&path, b))
-        .reduce_with(consolidate) {
-            if let Err(e) = res {
-                log_err(e, log::Level::Warn);
-            }
+    if let Some(res) = backups.par_iter().map(|b| backup(&path, b)).reduce_with(consolidate) {
+        if let Err(e) = res {
+            log_err(e, log::Level::Warn);
         }
+    }
 }
 
 fn backup(p: &Path, b: &Backup) -> Result<()> {
     match b.name.as_ref() {
         "github-gists" => github::upload(p, b),
-        _ => custom::upload(p, b)
+        _ => custom::upload(p, b),
     }
 }
 

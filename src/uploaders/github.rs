@@ -1,12 +1,11 @@
-use std::path::Path;
-use serde_json::{Value, json};
-use std::fs;
-use std::borrow::Cow;
 use reqwest::blocking::Response;
+use serde_json::{json, Value};
+use std::borrow::Cow;
+use std::fs;
+use std::path::Path;
 
 use crate::appconfig::Backup;
-use crate::Result;
-use failure::format_err;
+use anyhow::{format_err, Error, Result};
 
 fn get_request_map(path: &Path) -> Result<Value> {
     let package_name = Path::file_stem(path).and_then(|s| s.to_str()).unwrap();
@@ -31,39 +30,45 @@ fn get_host_url() -> String {
     #[cfg(test)]
     let url = mockito::server_url();
 
-    return url; 
+    return url;
 }
 
 pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
-    let token = backups.get_creds()
-        .ok_or(format_err!("Github OAuth token required for Github backup; did not backup {}", get_file_name(path)))?;
+    let token = backups.get_creds().ok_or(format_err!(
+        "Github OAuth token required for Github backup; did not backup {}",
+        get_file_name(path)
+    ))?;
 
-    let gist_id = backups.get_destination()
-        .ok_or(format_err!("Gist id required for Github backup; did not backup {}", get_file_name(path)))?;
+    let gist_id = backups.get_destination().ok_or(format_err!(
+        "Gist id required for Github backup; did not backup {}",
+        get_file_name(path)
+    ))?;
 
     let client = reqwest::blocking::Client::new();
 
-    match client.patch(&format!("{}/gists/{}", get_host_url(), gist_id))
+    match client
+        .patch(&format!("{}/gists/{}", get_host_url(), gist_id))
         .json(&get_request_map(path)?)
         .bearer_auth(token)
-        .send() {
-            Ok(ref r) if r.status().is_success() => Ok(()),
-            Ok(r) => Err(format_err!("{}", get_text(r))),
-            Err(e) => Err(failure::Error::from(e))
-        }
+        .send()
+    {
+        Ok(ref r) if r.status().is_success() => Ok(()),
+        Ok(r) => Err(format_err!("{}", get_text(r))),
+        Err(e) => Err(Error::from(e)),
+    }
 }
 
 fn get_file_name(path: &Path) -> Cow<str> {
     match path.file_name() {
         Some(s) => s.to_string_lossy(),
-        None => Cow::from("")
+        None => Cow::from(""),
     }
 }
 
 fn get_text(r: Response) -> String {
     match r.text() {
         Ok(s) => s,
-        Err(e) => format!("{}", e)
+        Err(e) => format!("{}", e),
     }
 }
 
@@ -72,10 +77,10 @@ mod tests {
 
     use super::*;
     use mockito::mock;
-    use tempdir::TempDir;
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
+    use tempdir::TempDir;
 
     #[test]
     fn should_validate_before_calling() {
@@ -83,7 +88,7 @@ mod tests {
             name: "test".to_owned(),
             custom: None,
             credentials: None,
-            destination: Some("somewhere".to_owned())
+            destination: Some("somewhere".to_owned()),
         };
 
         let path = Path::new("path");
@@ -139,8 +144,7 @@ mod tests {
         let tmp_dir = TempDir::new(&format!("backup_tmp_{}", name))?;
         let path = tmp_dir.path().join("test.txt");
         let mut tmp_file = File::create(&path)?;
-        writeln!(tmp_file, "{}", content)?; 
+        writeln!(tmp_file, "{}", content)?;
         return Ok((path, tmp_dir));
     }
-
 }

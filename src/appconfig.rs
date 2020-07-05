@@ -1,20 +1,19 @@
-use std::io::BufReader;
 use std::fs::File;
-use failure::ResultExt;
+use std::io::BufReader;
 
-use crate::Result;
+use anyhow::{Context, Error, Result};
 
 #[derive(Deserialize, Debug)]
 pub struct AppConfig {
     pub archive_path: String,
     pub archives: Vec<Archive>,
-    pub backups: Vec<Backup>
+    pub backups: Vec<Backup>,
 }
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Archive {
     pub name: String,
-    pub content: String
+    pub content: String,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -22,7 +21,7 @@ pub struct Backup {
     pub name: String,
     pub custom: Option<String>,
     pub destination: Option<String>,
-    pub credentials: Option<String>
+    pub credentials: Option<String>,
 }
 
 impl Backup {
@@ -42,6 +41,5 @@ impl Backup {
 pub fn read_config(config_path: &str) -> Result<AppConfig> {
     let file = File::open(config_path).context("missing config")?;
     let buf_reader = BufReader::new(file);
-    serde_json::from_reader(buf_reader)
-        .map_err(|err| failure::Error::from(err))
+    serde_json::from_reader(buf_reader).map_err(|err| Error::from(err))
 }
