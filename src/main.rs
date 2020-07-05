@@ -1,8 +1,3 @@
-extern crate serde_json;
-extern crate serde;
-extern crate reqwest;
-extern crate rayon;
-
 use backup::{appconfig, backup_performer, archive_generator, logger};
 use rayon::prelude::*;
 use std::result;

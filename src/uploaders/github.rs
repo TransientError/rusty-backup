@@ -2,7 +2,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 use std::fs;
 use std::borrow::Cow;
-use reqwest::Response;
+use reqwest::blocking::Response;
 
 use crate::appconfig::Backup;
 use crate::Result;
@@ -41,7 +41,7 @@ pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
     let gist_id = backups.get_destination()
         .ok_or(format_err!("Gist id required for Github backup; did not backup {}", get_file_name(path)))?;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::blocking::Client::new();
 
     match client.patch(&format!("{}/gists/{}", get_host_url(), gist_id))
         .json(&get_request_map(path)?)
@@ -60,7 +60,7 @@ fn get_file_name(path: &Path) -> Cow<str> {
     }
 }
 
-fn get_text(mut r: Response) -> String {
+fn get_text(r: Response) -> String {
     match r.text() {
         Ok(s) => s,
         Err(e) => format!("{}", e)
