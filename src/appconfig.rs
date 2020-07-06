@@ -10,13 +10,13 @@ pub struct AppConfig {
     pub backups: Vec<Backup>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, Clone)]
 pub struct Archive {
     pub name: String,
     pub content: String,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, Clone)]
 pub struct Backup {
     pub name: String,
     pub custom: Option<String>,

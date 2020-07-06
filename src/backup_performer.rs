@@ -3,25 +3,37 @@ use crate::log_err;
 use crate::uploaders::{custom, github};
 use anyhow::Result;
 
-use anyhow::Error;
+use anyhow::{bail, Error};
+use futures::{
+    channel::mpsc,
+    future,
+    stream::{self, StreamExt, TryStreamExt},
+};
 use log::info;
-use rayon::prelude::*;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::result;
-use std::time::{Duration, SystemTime};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
-pub fn perform_backup(backups: Vec<Backup>, path: &String) {
+pub async fn perform_backup(backups: Vec<Backup>, path: &String) -> Result<()> {
+    let ref_backups = Arc::new(backups);
     match fs::read_dir(path) {
         Ok(entries) => {
-            entries
-                .filter_map(process_file)
-                .filter_map(process_entry)
-                .for_each(|p| process_path(p, &backups));
+            stream::iter(entries.filter_map(process_file).filter_map(process_entry))
+                .map(Result::Ok)
+                .try_for_each(|p| {
+                    let ref_backups = ref_backups.clone();
+                    async move { process_path(p, ref_backups).await }
+                })
+                .await?;
         }
-        Err(e) => log_err(Error::from(e), log::Level::Error),
+        Err(e) => return Err(Error::from(e)),
     }
+    Ok(())
 }
 
 fn process_file(result: io::Result<DirEntry>) -> Option<DirEntry> {
@@ -62,27 +74,51 @@ fn has_been_modified(time: SystemTime, secs: u64) -> bool {
         .unwrap_or(false);
 }
 
-fn process_path(path: PathBuf, backups: &Vec<Backup>) {
-    if let Some(res) = backups.par_iter().map(|b| backup(&path, b)).reduce_with(consolidate) {
-        if let Err(e) = res {
-            log_err(e, log::Level::Warn);
-        }
+async fn process_path(path: PathBuf, backups: Arc<Vec<Backup>>) -> Result<()> {
+    if let Err(e) = do_backup(path, backups).await {
+        log_err(e, log::Level::Warn);
+    }
+    Ok(())
+}
+
+async fn do_backup(path: PathBuf, backups: Arc<Vec<Backup>>) -> Result<()> {
+    let (mut tx_res, rx_res) = mpsc::channel(backups.len() + 2);
+    let (tx_lim, rx_lim) = crossbeam::bounded(4);
+
+    for _ in 0..4 {
+        tx_lim.send(()).unwrap();
+    }
+
+    for b in backups.iter() {
+        rx_lim.recv().map_err(Error::from).and_then(|_| {
+            tx_res
+                .try_send(tokio::spawn({
+                    let path = path.clone();
+                    let b = b.to_owned();
+                    async move { backup(&path, &b).await }
+                }))
+                .map_err(Error::from)
+        })?
+    }
+
+    let errs: Vec<Error> = rx_res
+        .buffer_unordered(4)
+        .filter_map(|res| future::ready(res.err().map(Error::from)))
+        .collect()
+        .await;
+
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        bail!("{} backups failed because of e.g. {}", errs.len(), errs[0])
     }
 }
 
-fn backup(p: &Path, b: &Backup) -> Result<()> {
+async fn backup(p: &Path, b: &Backup) -> Result<()> {
     match b.name.as_ref() {
-        "github-gists" => github::upload(p, b),
+        "github-gists" => github::upload(p, b).await,
         _ => custom::upload(p, b),
     }
-}
-
-fn consolidate(r1: Result<()>, r2: Result<()>) -> Result<()> {
-    if let Err(e) = r1 {
-        log_err(e, log::Level::Warn);
-        return r2;
-    }
-    r1.and(r2)
 }
 
 #[cfg(test)]

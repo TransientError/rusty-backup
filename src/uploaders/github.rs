@@ -1,11 +1,11 @@
-use reqwest::blocking::Response;
+use reqwest::Response;
 use serde_json::{json, Value};
 use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
 use crate::appconfig::Backup;
-use anyhow::{format_err, Error, Result};
+use anyhow::{format_err, Error, Result, bail};
 
 fn get_request_map(path: &Path) -> Result<Value> {
     let package_name = Path::file_stem(path).and_then(|s| s.to_str()).unwrap();
@@ -33,7 +33,7 @@ fn get_host_url() -> String {
     return url;
 }
 
-pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
+pub async fn upload(path: &Path, backups: &Backup) -> Result<()> {
     let token = backups.get_creds().ok_or(format_err!(
         "Github OAuth token required for Github backup; did not backup {}",
         get_file_name(path)
@@ -44,16 +44,17 @@ pub fn upload(path: &Path, backups: &Backup) -> Result<()> {
         get_file_name(path)
     ))?;
 
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::Client::new();
 
     match client
         .patch(&format!("{}/gists/{}", get_host_url(), gist_id))
         .json(&get_request_map(path)?)
         .bearer_auth(token)
         .send()
+        .await
     {
         Ok(ref r) if r.status().is_success() => Ok(()),
-        Ok(r) => Err(format_err!("{}", get_text(r))),
+        Ok(r) => bail!("{}", get_text(r).await),
         Err(e) => Err(Error::from(e)),
     }
 }
@@ -65,8 +66,8 @@ fn get_file_name(path: &Path) -> Cow<str> {
     }
 }
 
-fn get_text(r: Response) -> String {
-    match r.text() {
+async fn get_text(r: Response) -> String {
+    match r.text().await {
         Ok(s) => s,
         Err(e) => format!("{}", e),
     }
@@ -82,8 +83,8 @@ mod tests {
     use std::path::PathBuf;
     use tempdir::TempDir;
 
-    #[test]
-    fn should_validate_before_calling() {
+    #[tokio::test]
+    async fn should_validate_before_calling() {
         let backup = Backup {
             name: "test".to_owned(),
             custom: None,
@@ -93,13 +94,13 @@ mod tests {
 
         let path = Path::new("path");
 
-        let result = upload(path, &backup);
+        let result = upload(path, &backup).await;
 
         assert!(result.is_err());
     }
 
-    #[test]
-    fn should_upload() {
+    #[tokio::test]
+    async fn should_upload() {
         let backup = Backup {
             name: "test".to_owned(),
             credentials: Some("creds".to_owned()),
@@ -114,13 +115,13 @@ mod tests {
             .with_body("test")
             .create();
 
-        let result = upload(&path.as_path(), &backup);
+        let result = upload(&path.as_path(), &backup).await;
 
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn should_report_err() {
+    #[tokio::test]
+    async fn should_report_err() {
         let backup = Backup {
             name: "test".to_owned(),
             credentials: Some("creds".to_owned()),
@@ -135,7 +136,7 @@ mod tests {
             .with_body("error")
             .create();
 
-        let result = upload(&path.as_path(), &backup);
+        let result = upload(&path.as_path(), &backup).await;
 
         assert!(result.is_err());
     }
